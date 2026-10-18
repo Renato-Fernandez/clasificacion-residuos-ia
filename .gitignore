@@ -1,0 +1,9 @@
+# Archivos privados
+.streamlit/secrets.toml
+.env
+
+# Archivos que no necesitamos publicar
+datos/
+runs/
+__pycache__/
+.ipynb_checkpoints/

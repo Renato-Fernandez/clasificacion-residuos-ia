@@ -1,0 +1,14 @@
+# Colores de la aplicación
+[theme]
+base = "light"
+primaryColor = "#267B57"
+backgroundColor = "#FFFFFF"
+secondaryBackgroundColor = "#F1F7F3"
+textColor = "#1B2B23"
+font = "sans serif"
+
+[server]
+headless = true
+
+[browser]
+gatherUsageStats = false

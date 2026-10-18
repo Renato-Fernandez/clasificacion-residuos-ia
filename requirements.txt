@@ -1,0 +1,14 @@
+# Aplicación web
+streamlit==1.54.0
+
+# Clasificación de imágenes
+ultralytics==8.4.182
+pillow
+numpy==1.26.4
+
+# Gráficos y tablas
+pandas
+pyarrow==24.0.0
+
+# Inteligencia artificial generativa
+google-genai==2.31.0
