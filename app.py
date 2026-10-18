@@ -5,19 +5,93 @@ from PIL import Image
 # Configurar la aplicación
 st.set_page_config(page_title="Clasificación de residuos",page_icon="♻️",layout="wide")
 
-st.title("Clasificación de residuos")
-st.write("Sube una fotografía para identificar el material y recibir recomendaciones de reciclaje.")
+# Personalizar el diseño
+st.markdown("""
+<style>
+    .stApp {
+        background-color: #F5F8F4;
+    }
+
+    .block-container {
+        max-width: 1150px;
+        padding-top: 2rem;
+        padding-bottom: 3rem;
+    }
+
+    .hero {
+        background: linear-gradient(120deg, #174631, #2E8054);
+        padding: 35px 40px;
+        border-radius: 20px;
+        margin-bottom: 25px;
+    }
+
+    .hero h1 {
+        color: white;
+        font-size: 2.6rem;
+        margin: 12px 0;
+    }
+
+    .hero p {
+        color: #E3F1E8;
+        font-size: 1.05rem;
+        margin-bottom: 0;
+    }
+
+    .etiqueta {
+        color: #C6E8D1;
+        font-size: 0.8rem;
+        font-weight: 600;
+        letter-spacing: 2px;
+    }
+
+    div[data-testid="stMetric"] {
+        background-color: white;
+        border: 1px solid #DFE9E0;
+        border-radius: 15px;
+        padding: 20px;
+    }
+
+    div[data-testid="stImage"] img {
+        border-radius: 15px;
+    }
+
+    div[data-testid="stFileUploader"] {
+        background-color: white;
+        border-radius: 12px;
+    }
+
+    h2, h3 {
+        color: #1B4631;
+    }
+</style>
+""",unsafe_allow_html=True)
+
+# Encabezado de la aplicación
+st.markdown("""
+<div class="hero">
+    <div class="etiqueta">RECICLAJE INTELIGENTE</div>
+    <h1>♻ Clasificación de residuos</h1>
+    <p>Identifica materiales mediante inteligencia artificial y aprende a separarlos correctamente.</p>
+</div>
+""",unsafe_allow_html=True)
 
 # Crear las pestañas
 tab1,tab2=st.tabs(["Clasificar residuo","Sobre el modelo"])
 
 with tab1:
+    st.subheader("Analiza tu residuo")
+    st.write("Sube una fotografía para conocer el material y obtener recomendaciones de reciclaje.")
+
     # Permitir cargar una fotografía
     archivo=st.file_uploader("Selecciona una imagen",type=["jpg","jpeg","png"])
 
     if archivo is not None:
+        # Mostrar la imagen junto a los resultados
         imagen=Image.open(archivo).convert("RGB")
-        st.image(imagen,caption="Fotografía cargada",width=400)
+        col_imagen,col_resultado=st.columns([1,1.2],gap="large")
+
+        with col_imagen:
+            st.image(imagen,caption="Fotografía cargada",width="stretch")
 # Importar YOLO
 from ultralytics import YOLO
 
@@ -26,25 +100,29 @@ from ultralytics import YOLO
 def cargar_modelo():
     return YOLO("modelos/yolo_residuos.pt")
 
-with tab1:
-    if archivo is not None:
-        # Clasificar la imagen
-        modelo=cargar_modelo()
-        resultado=modelo(imagen,verbose=False)[0]
+# Clasificar la fotografía
+if archivo is not None:
+    modelo=cargar_modelo()
+    resultado=modelo(imagen,verbose=False)[0]
 
-        # Obtener la clase y su confianza
-        clase=resultado.names[resultado.probs.top1]
-        confianza=resultado.probs.top1conf.item()
+    # Obtener la clase y su confianza
+    clase=resultado.names[resultado.probs.top1]
+    confianza=resultado.probs.top1conf.item()
 
-        # Mostrar los resultados
+    # Traducir las categorías al español
+    nombres={
+        "Cardboard":"Cartón",
+        "Glass":"Vidrio",
+        "Metal":"Metal",
+        "Paper":"Papel",
+        "Plastic":"Plástico"
+    }
+
+    # Mostrar los resultados a la derecha
+    with col_resultado:
         st.subheader("Resultado de la clasificación")
-        col1,col2=st.columns(2)
-
-        with col1:
-            st.metric("Material identificado",clase)
-
-        with col2:
-            st.metric("Confianza",f"{confianza:.1%}")
+        st.metric("Material identificado",nombres[clase])
+        st.metric("Confianza",f"{confianza:.1%}")
 import pandas as pd
 
 with tab1:
@@ -52,16 +130,20 @@ with tab1:
         # Obtener las probabilidades de las cinco clases
         probabilidades=resultado.probs.data.cpu().numpy()
 
-        # Organizar los resultados en una tabla
+        # Organizar los resultados en español
         tabla=pd.DataFrame({
-            "Material":[resultado.names[i] for i in range(len(probabilidades))],
+            "Material":[nombres[resultado.names[i]] for i in range(len(probabilidades))],
             "Probabilidad (%)":(probabilidades*100).round(1)
         })
 
-        # Mostrar las probabilidades
+        # Mostrar el gráfico de probabilidades
         st.subheader("Probabilidades por material")
-        st.bar_chart(tabla.set_index("Material"))
-        st.dataframe(tabla,hide_index=True,use_container_width=True)
+        st.bar_chart(tabla,x="Material",y="Probabilidad (%)",
+                     color="#2E8054",horizontal=True,height=300,sort=False)
+
+        # Mostrar los porcentajes exactos
+        with st.expander("Ver tabla de probabilidades"):
+            st.dataframe(tabla,hide_index=True,width="stretch")
 
 with tab1:
     if archivo is not None:
@@ -109,26 +191,133 @@ with tab1:
 
             except Exception:
                 st.error("No fue posible consultar Gemini. Revisa la conexión y la API Key.")
+import os
+import pandas as pd
 with tab2:
     # Información del dataset
-    st.subheader("Datos utilizados")
-    st.write("Utilizamos el dataset RealWaste, seleccionando 3.092 imágenes de cinco materiales.")
-    st.write("El 80% se utilizó para entrenamiento y el 20% para validación.")
+    st.subheader("Dataset RealWaste")
+    st.write(
+        "RealWaste fue desarrollado por Single, Iranmanesh y Raad (2023), "
+        "utilizando fotografías de residuos recibidos en una instalación "
+        "de gestión de residuos en Wollongong, Australia."
+    )
+    st.write(
+        "El dataset original contiene 4.752 imágenes de nueve categorías. "
+        "Para nuestro proyecto seleccionamos cinco materiales."
+    )
 
-    # Mostrar el rendimiento de los modelos
+    # Resumen de los datos
+    col1,col2,col3=st.columns(3)
+    with col1:
+        st.metric("Imágenes seleccionadas","3.092")
+    with col2:
+        st.metric("Entrenamiento","2.472")
+    with col3:
+        st.metric("Validación","620")
+
+    st.caption("80% de entrenamiento y 20% de validación.")
+    st.markdown(
+        "**Fuente:** [RealWaste en Hugging Face]"
+        "(https://huggingface.co/datasets/shahzaibvohra/realwaste) · "
+        "[Autores originales](https://github.com/sam-single/realwaste)"
+    )
+    st.divider()
+
+    # Distribución de las categorías
+    st.subheader("Categorías del dataset")
+
+    datos_clases=pd.DataFrame({
+        "Material":["Cartón","Vidrio","Metal","Papel","Plástico"],
+        "Imágenes":[461,420,790,500,921],
+        "Entrenamiento":[368,336,632,400,736],
+        "Validación":[93,84,158,100,185]
+    })
+
+    st.bar_chart(datos_clases,x="Material",y="Imágenes",
+                 color="#2E8054",horizontal=True,height=280,sort=False)
+
+    with st.expander("Ver distribución de entrenamiento y validación"):
+        st.dataframe(datos_clases,hide_index=True,width="stretch")
+
+    # Mostrar fotografías del dataset
+    st.markdown("**Ejemplos de las categorías**")
+
+    clases=["Cardboard","Glass","Metal","Paper","Plastic"]
+    materiales=["Cartón","Vidrio","Metal","Papel","Plástico"]
+
+    if all(os.path.exists(f"ejemplos/{c}.jpg") for c in clases):
+        columnas=st.columns(5)
+
+        for i,clase in enumerate(clases):
+            with columnas[i]:
+                st.image(f"ejemplos/{clase}.jpg",width="stretch")
+                st.caption(materiales[i])
+    else:
+        st.info("Las fotografías de ejemplo todavía no están disponibles.")
+
+    st.divider()
+
+    # Comparación de los modelos
     st.subheader("Comparación de modelos")
     col1,col2=st.columns(2)
 
     with col1:
-        st.metric("EfficientNet-B0", "87,3%")
+        st.metric("EfficientNet-B0","87,3%")
 
     with col2:
-        st.metric("YOLO26n-cls", "91,5%")
-    st.caption("Accuracy balanceada obtenida durante la validación.")
+        st.metric("YOLO26n-cls","91,5%")
 
-    # Resultados del modelo seleccionado
-    st.subheader("Rendimiento de YOLO")
-    st.write("Accuracy: 91,0%")
-    st.write("Accuracy balanceada: 91,5%")
-    st.write("Imágenes clasificadas correctamente: 564 de 620.")
-    st.info("Estos resultados corresponden a validación. El rendimiento puede variar al utilizar fotografías nuevas.")
+    st.caption("Accuracy balanceada obtenida con las mismas 620 imágenes de validación.")
+    st.success("Seleccionamos YOLO por obtener el mejor rendimiento en validación.")
+    st.divider()
+
+    # Resultados generales de YOLO
+    st.subheader("Evaluación de YOLO")
+    col1,col2,col3=st.columns(3)
+
+    with col1:
+        st.metric("Accuracy","91,0%")
+
+    with col2:
+        st.metric("Accuracy balanceada","91,5%")
+
+    with col3:
+        st.metric("Imágenes correctas","564 / 620")
+
+    # Métricas para cada material
+    st.markdown("**Rendimiento por categoría**")
+    metricas=pd.DataFrame({
+        "Material":["Cartón","Vidrio","Metal","Papel","Plástico"],
+        "Precision":[0.93,0.92,0.89,0.94,0.89],
+        "Recall":[0.88,0.95,0.90,0.95,0.89],
+        "F1-score":[0.91,0.94,0.90,0.95,0.89]
+    })
+    st.dataframe(metricas,hide_index=True,width="stretch")
+
+    # Matriz de confusión
+    with st.expander("Ver matriz de confusión"):
+        matriz=pd.DataFrame(
+            [[82,0,1,3,7],
+             [0,80,2,1,1],
+             [1,3,142,1,11],
+             [2,0,2,95,1],
+             [3,4,12,1,165]],
+            index=materiales,
+            columns=materiales
+        )
+
+        st.caption("Filas: material real. Columnas: material predicho.")
+        st.dataframe(matriz,width="stretch")
+        st.write(
+            "Una de las principales confusiones ocurre entre plástico "
+            "y metal: 12 imágenes de plástico se clasificaron como metal "
+            "y 11 de metal como plástico."
+        )
+
+        # Limitaciones del modelo
+        st.info(
+            "El modelo puede confundirse con residuos de apariencia similar o compuestos "
+            "por varios materiales. En la validación, las principales confusiones fueron "
+            "entre plástico y metal: 12 plásticos se clasificaron como metal y 11 metales "
+            "como plástico."
+        )
